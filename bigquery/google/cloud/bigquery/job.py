@@ -15,6 +15,7 @@
 """Define API Jobs."""
 
 import random
+import warnings
 
 import six
 
@@ -942,11 +943,15 @@ class QueryJob(_AsyncJob):
     _QUERY_PARAMETERS_KEY = 'queryParameters'
 
     def __init__(self, name, query, client,
-                 udf_resources=(), query_parameters=()):
+                 udf_resources=(), params=(), query_parameters=()):
         super(QueryJob, self).__init__(name, client)
         self.query = query
         self.udf_resources = udf_resources
-        self.query_parameters = query_parameters
+        if query_parameters:
+            warnings.warn('The `query_parameters` argument is renamed to '
+                          '`params`.', DeprecationWarning)
+            self.params = query_parameters
+        self.params = params
         self._configuration = _AsyncQueryConfiguration()
 
     allow_large_results = _TypedProperty('allow_large_results', bool)
@@ -979,7 +984,7 @@ class QueryJob(_AsyncJob):
     https://cloud.google.com/bigquery/docs/reference/v2/jobs#configuration.query.priority
     """
 
-    query_parameters = QueryParametersProperty()
+    params = QueryParametersProperty()
 
     udf_resources = UDFResourcesProperty()
 
@@ -1066,12 +1071,11 @@ class QueryJob(_AsyncJob):
                 {udf_resource.udf_type: udf_resource.value}
                 for udf_resource in self._udf_resources
             ]
-        if len(self._query_parameters) > 0:
+        if len(self._params) > 0:
             configuration[self._QUERY_PARAMETERS_KEY] = [
-                query_parameter.to_api_repr()
-                for query_parameter in self._query_parameters
+                p.to_api_repr() for p in self._params
             ]
-            if self._query_parameters[0].name is None:
+            if self._params[0].name is None:
                 configuration['parameterMode'] = 'POSITIONAL'
             else:
                 configuration['parameterMode'] = 'NAMED'
@@ -1120,6 +1124,13 @@ class QueryJob(_AsyncJob):
             if dest_remote != dest_local:
                 dataset = self._client.dataset(dest_remote['datasetId'])
                 self.destination = dataset.table(dest_remote['tableId'])
+                
+    @property
+    def query_parameters(self):
+        """Return the params."""
+        warnings.warn('The `query_parameters` property has been renamed '
+                      'to `params`.', DeprecationWarning)
+        return self.params
 
     @classmethod
     def from_api_repr(cls, resource, client):

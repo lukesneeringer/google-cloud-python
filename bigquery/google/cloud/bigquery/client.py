@@ -15,6 +15,7 @@
 """Client for interacting with the Google BigQuery API."""
 
 import uuid
+import warnings
 
 import six
 
@@ -329,7 +330,7 @@ class Client(ClientWithProject):
         # Create the job, and execute it.
         job = QueryJob(job_name, sql,
             client=self,
-            query_parameters=params,
+            params=params,
             udf_resources=udf_resources,
         )
 
