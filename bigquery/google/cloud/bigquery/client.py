@@ -14,6 +14,7 @@
 
 """Client for interacting with the Google BigQuery API."""
 
+import uuid
 
 import six
 

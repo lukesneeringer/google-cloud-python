@@ -14,6 +14,8 @@
 
 """Define API Queries."""
 
+import warnings
+
 import six
 
 from google.cloud.bigquery._helpers import _TypedProperty
@@ -65,6 +67,10 @@ class QueryResults(object):
     _QUERY_PARAMETERS_KEY = 'queryParameters'
 
     def __init__(self, query, client, udf_resources=(), query_parameters=()):
+        # Sanity check: The use of this class is deprecated.
+        warnings.warn('The QueryResults class is deprectated in favor '
+                      'of QueryJobResult.', DeprecationWarning)
+
         self._client = client
         self._properties = {}
         self.query = query

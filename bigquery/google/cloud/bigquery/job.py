@@ -14,10 +14,13 @@
 
 """Define API Jobs."""
 
+import random
+
 import six
 
 from google.cloud.exceptions import NotFound
 from google.cloud._helpers import _datetime_from_microseconds
+from google.cloud.bigquery import exceptions as exc
 from google.cloud.bigquery.dataset import Dataset
 from google.cloud.bigquery.schema import SchemaField
 from google.cloud.bigquery.table import Table
@@ -388,16 +391,6 @@ class _AsyncJob(_BaseJob):
         api_response = client._connection.api_request(
             method='POST', path='%s/cancel' % (self.path,))
         self._set_properties(api_response['job'])
-
-    def join(self, client=None, _delay=1):
-        """API calls: poll until the job has completed then return the result.
-
-        This call is (intentionally) blocking.
-
-        This will poll the BigQuery API until it says the job has completed,
-        and then return the results.
-        """
-
 
 
 class _LoadConfiguration(object):
@@ -1148,6 +1141,60 @@ class QueryJob(_AsyncJob):
         job._set_properties(resource)
         return job
 
+    def join(self, client=None, timeout=None, max_cadence=60, _delay=1):
+        """API calls: poll until the job has completed then return the result.
+
+        This call is (intentionally) blocking.
+
+        This will poll the BigQuery API until it says the job has completed,
+        and then return the results.
+
+        :type client: :class:`~google.cloud.bigquery.client.Client` or
+            ``NoneType``
+        :param client: the client to use.  If not passed, falls back to the
+            ``client`` stored on the current dataset.
+
+        :type timeout: int or None
+        :param timeout: The timeout, in seconds. If the timeout is reached,
+            a ``Timeout`` exception is raised.
+
+        :type max_cadence: int
+        :param max_cadence: The maximum cadence with which to poll the server
+            (the upper bound on the exponential backoff algorithm). Defaults
+            to 60 seconds. Note that due to introducing jitter, this is an
+            expected value (actual polling values will vary between
+            0 <= x <= max_cadence * 2).
+        """
+        # Reload this job to get new data from the server.
+        self.reload()
+
+        # Is the job done? If so, return results.
+        if self.state.upper() == 'DONE':
+            if self.error_result:
+                raise exc.QueryJobError(
+                    'Errors executing job "%s."' % self.name,
+                    errors=self.errors,
+                    error_result=self.error_result,
+                )
+            return self.results()
+
+        # Determine how long to wait before trying again.
+        delay = random.uniform(0, _delay * 2)
+
+        # Sanity check: If the wait time would cause us to exceed our timeout,
+        # raise an exception.
+        if timeout - delay < 0:
+            raise exc.Timeout('Timeout exceeded on job "%s".' % self.name)
+
+        # Actually sleep for the delay, then call the polling method again.
+        time.sleep(delay)
+        return self.join(
+            client=client,
+            max_cadence=max_cadence,
+            timeout=timeout - delay,
+            _delay=min([_delay * 2, max_cadence]),
+        )
+
     def results(self):
         """Construct a QueryResults instance, bound to this job.
 
@@ -1155,4 +1202,4 @@ class QueryJob(_AsyncJob):
         :returns: results instance
         """
         from google.cloud.bigquery.query import QueryResults
-        return QueryResults.from_query_job(self)
+        return QueryJobResult(job=self)
