@@ -298,8 +298,8 @@ class _AsyncJob(_BaseJob):
         config = resource['configuration'][cls._JOB_TYPE]
         return name, config
 
-    def begin(self, client=None):
-        """API call:  begin the job via a POST request
+    def start(self, client=None):
+        """API call: start the job via a POST request
 
         See:
         https://cloud.google.com/bigquery/docs/reference/v2/jobs/insert
@@ -319,6 +319,17 @@ class _AsyncJob(_BaseJob):
         api_response = client._connection.api_request(
             method='POST', path=path, data=self._build_resource())
         self._set_properties(api_response)
+
+    @functools.wraps(start)
+    def begin(self, client=None):
+        """Deprecated alias for `start`.
+
+        DEPRECATED: 2017-03-23
+        """
+        warnings.warn('The `begin` method on all jobs has been renamed '
+                      'to `start`.',
+                      DeprecationWarning)
+        return self.start(client=client)
 
     def exists(self, client=None):
         """API call:  test for the existence of the job via a GET request
@@ -377,6 +388,16 @@ class _AsyncJob(_BaseJob):
         api_response = client._connection.api_request(
             method='POST', path='%s/cancel' % (self.path,))
         self._set_properties(api_response['job'])
+
+    def join(self, client=None, _delay=1):
+        """API calls: poll until the job has completed then return the result.
+
+        This call is (intentionally) blocking.
+
+        This will poll the BigQuery API until it says the job has completed,
+        and then return the results.
+        """
+
 
 
 class _LoadConfiguration(object):

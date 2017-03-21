@@ -15,6 +15,8 @@
 """Client for interacting with the Google BigQuery API."""
 
 
+import six
+
 from google.cloud.client import ClientWithProject
 from google.cloud.bigquery._http import Connection
 from google.cloud.bigquery.dataset import Dataset
@@ -287,6 +289,56 @@ class Client(ClientWithProject):
         return ExtractTableToStorageJob(job_name, source, destination_uris,
                                         client=self)
 
+    def query(self, sql, params=(), udf_resources=(), job_name=uuid.uuid4,
+                    start_immediately=True, ):
+        """Execute the provided SQL query.
+
+        Returns an object representing the job in BigQuery.
+
+        If no job name is provided, then the client creates one using
+        a randomly-generated UUID.
+
+        :type sql: str
+        :param sql: The SQL query to be executed
+
+        :type params: tuple
+        :param params: An iterable of
+            :class:`google.cloud.bigquery._helpers.AbstractQueryParameter`
+            (empty by default)
+
+        :type udf_resources: tuple
+        :param udf_resources: An iterable of
+            :class:`google.cloud.bigquery._helpers.UDFResource`
+            (empty by default)
+
+        :type job_name: str or function
+        :param job_name: The name of the job to be provided to BigQuery.
+            If a function is provided, it is called, and the result of the
+            function is used. Defaults to `uuid.uuid4`.
+
+        :type start_immediately: bool
+        :param start_immediately: Starts the job immediately with an API
+            POST request. Defaults to True.
+        """
+        # If the provided job name is a callable, run it and coerce
+        # to string to get an actual job name.
+        if callable(job_name):
+            job_name = six.text_type(job_name())
+
+        # Create the job, and execute it.
+        job = QueryJob(job_name, sql,
+            client=self,
+            query_parameters=params,
+            udf_resources=udf_resources,
+        )
+
+        # Unless we were explicitly told not to, start the job now.
+        if start_immediately:
+            job.start()
+
+        # Return the job.
+        return job
+
     def run_async_query(self, job_name, query,
                         udf_resources=(), query_parameters=()):
         """Construct a job for running a SQL query asynchronously.
@@ -314,9 +366,19 @@ class Client(ClientWithProject):
         :rtype: :class:`google.cloud.bigquery.job.QueryJob`
         :returns: a new ``QueryJob`` instance
         """
-        return QueryJob(job_name, query, client=self,
-                        udf_resources=udf_resources,
-                        query_parameters=query_parameters)
+        # This is no longer the preferred method. Denote this to users.
+        warnings.warn(
+            '`Job.run_async_query` is deprecated; use `Job.query` instead.',
+            DeprecationWarning,
+        )
+
+        # Call the new `query` method and return the result.
+        return self.query(query,
+            job_name=job_name,
+            params=query_parameters,
+            start_immediately=False,
+            udf_resources=udf_resources,
+        )
 
     def run_sync_query(self, query, udf_resources=(), query_parameters=()):
         """Run a SQL query synchronously.
@@ -338,9 +400,19 @@ class Client(ClientWithProject):
         :rtype: :class:`google.cloud.bigquery.query.QueryResults`
         :returns: a new ``QueryResults`` instance
         """
-        return QueryResults(query, client=self,
-                            udf_resources=udf_resources,
-                            query_parameters=query_parameters)
+        # This is no longer the preferred method, and the behavior has
+        # changed.
+        warnings.warn(
+            '`Job.run_sync_query` is deprecated; use `Job.query` instead, '
+            'and call `.join` on the result.',
+            DeprecationWarning,
+        )
+
+        # Return a joined QueryJob.
+        return self.query(query,
+            params=query_parameters,
+            udf_resources=udf_resources,
+        ).join()
 
 
 # pylint: disable=unused-argument
