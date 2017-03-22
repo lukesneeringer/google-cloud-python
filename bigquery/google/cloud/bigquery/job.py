@@ -23,6 +23,7 @@ from google.cloud.exceptions import NotFound
 from google.cloud._helpers import _datetime_from_microseconds
 from google.cloud.bigquery import exceptions as exc
 from google.cloud.bigquery.dataset import Dataset
+from google.cloud.bigquery.results import Results
 from google.cloud.bigquery.schema import SchemaField
 from google.cloud.bigquery.table import Table
 from google.cloud.bigquery.table import _build_schema_resource
@@ -1124,7 +1125,7 @@ class QueryJob(_AsyncJob):
             if dest_remote != dest_local:
                 dataset = self._client.dataset(dest_remote['datasetId'])
                 self.destination = dataset.table(dest_remote['tableId'])
-                
+
     @property
     def query_parameters(self):
         """Return the params."""
@@ -1179,7 +1180,7 @@ class QueryJob(_AsyncJob):
         # Reload this job to get new data from the server.
         self.reload()
 
-        # Is the job done? If so, return results.
+        # Is the job done? If so, return itself.
         if self.state.upper() == 'DONE':
             if self.error_result:
                 raise exc.QueryJobError(
@@ -1187,7 +1188,7 @@ class QueryJob(_AsyncJob):
                     errors=self.errors,
                     error_result=self.error_result,
                 )
-            return self.results()
+            return self
 
         # Determine how long to wait before trying again.
         delay = random.uniform(0, _delay * 2)
@@ -1213,4 +1214,4 @@ class QueryJob(_AsyncJob):
         :returns: results instance
         """
         from google.cloud.bigquery.query import QueryResults
-        return QueryJobResult(job=self)
+        return QueryResults.from_query_job(self)

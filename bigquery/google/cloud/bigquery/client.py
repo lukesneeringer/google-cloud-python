@@ -292,7 +292,7 @@ class Client(ClientWithProject):
                                         client=self)
 
     def query(self, sql, params=(), udf_resources=(), job_name=uuid.uuid4,
-                    start_immediately=True, ):
+                    start_immediately=True):
         """Execute the provided SQL query.
 
         Returns an object representing the job in BigQuery.
@@ -374,7 +374,7 @@ class Client(ClientWithProject):
             DeprecationWarning,
         )
 
-        # Call the new `query` method and return the result.
+        # Route this through the new `query` method.
         return self.query(query,
             job_name=job_name,
             params=query_parameters,
@@ -410,11 +410,13 @@ class Client(ClientWithProject):
             DeprecationWarning,
         )
 
-        # Return a joined QueryJob.
-        return self.query(query,
-            params=query_parameters,
-            udf_resources=udf_resources,
-        ).join()
+        # Return the old QueryResults instance.
+        #
+        # Note that this will issue _another_ deprecation warning because we
+        # are not using QueryResults anymore.
+        return QueryResults(query, client=self,
+                            udf_resources=udf_resources,
+                            query_parameters=query_parameters)
 
 
 # pylint: disable=unused-argument
