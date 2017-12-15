@@ -71,15 +71,39 @@ def stage_api(src, dest):
             # If we could not find a package, abort loudly.
             if not package_match:
                 _('\r ERROR', fg='red', bold=True)
-                _('Could not determine the staging location. Is this a valid ')
-                _('Google Cloud API package? If it is, provide the dest ')
-                _('directory manually.')
+                _('Could not determine the staging location. Is this a valid '
+                  'Google Cloud API package? If it is, provide the dest '
+                  'directory manually.', file=sys.stderr, fg='red', bold=True)
                 return 32
 
             # The dest is the end of the package name; google-cloud prefix
             # dropped.
             dest = package_match.groups()[1].replace('-', '_')
             _('\r%s/' % dest, fg='green')
+
+    # Determine if this is a new API or an existing one.
+    _('Determining whether this API is being added or updated: \r', nl=False)
+    new_api = False
+    if not os.path.isdir(os.path.join(REPO_ROOT, dest)):
+        new_api = True
+    _('\r%s' % 'Added' if new_api else 'Updated', fg='green', bold=True)
+
+    # If the API is new, copy the whole kit and kaboodle.
+    copies = []
+    if new_api:
+        copies.append('')  # Project root.
+    else:
+        copies.append('google')
+        copies.append('tests')
+        copies.append('docs')
+    _('Copying files: ')
+    for copy_target in copies:
+        _('  Copying %s/ from autogen: \r' % copy_target)
+        shutil.copytree(
+            src=os.path.join(src, copy_target),
+            dst=os.path.join(REPO_ROOT, dest, copy_target),
+        )
+        _('\rSuccess', fg='green')
 
 
 def _verify_src(src):
@@ -97,4 +121,13 @@ if __name__ == '__main__':
     parser.add_argument('src', type=_verify_src)
     parser.add_argument('dest', default=None)
     args = parser.parse_args()
-    sys.exit(stage_api(args.src, args.dest))
+
+    try:
+        return_value = stage_api(args.src, args.dest)
+        sys.exit(return_value)
+    except Exception as ex:
+        _('An error occurred.', fg='red', bold=True, file=sys.stderr)
+        _('What happened: %s\n' % ex, file=sys.stderr)
+        _('It is possible that your working area has been left in an '
+          'inconsistent state.', file=sys.stderr)
+        sys.exit(1)
