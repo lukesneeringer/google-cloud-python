@@ -15,7 +15,7 @@
 import functools
 
 
-def grpc_call(fx):
+def grpc_call(func):
     """Decorator which duplicates the gRPC .with_call interface for RPCs.
 
     The way this work is that ``callable`` is expected to call an underlying
@@ -30,6 +30,13 @@ def grpc_call(fx):
         ServiceCall: A service call instance, which can keep or discard
             the call metadata as appropriate.
     """
+    @functools.wraps(func)
+    def predicate(*args, **kwargs):
+        """Return the gRPC call, but discard the Call object."""
+        return func(*args, **kwargs)[0]
+    predicate.with_call = func
+    return predicate
+
     return type('ServiceCall', (object,), {
         '__call__': functools.update_wrapper(
             lambda self, *args, **kwargs: fx(self, *args, **kwargs)[0],
